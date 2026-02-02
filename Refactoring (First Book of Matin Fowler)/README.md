@@ -4,9 +4,9 @@
 
 Ce code implémente un **système de gestion de locations de films** pour un vidéoclub. Il permet de :
 - Gérer des clients et leurs locations de films
-- Calculer le montant dû pour chaque location selon le type de film
+- Calculer le montant dû pour chaque location selon le type de film (5 catégories)
 - Accumuler des points de fidélité
-- Générer une situation récapitulative pour un client
+- Générer une situation récapitulative pour un client en **format texte** ou **HTML**
 
 ---
 
@@ -14,15 +14,26 @@ Ce code implémente un **système de gestion de locations de films** pour un vid
 
 ### Tarification selon le type de film :
 
-| Type de Film | Tarif de base | Supplément |
-|--------------|---------------|------------|
-| **NORMAL** | 2€ | +1.5€/jour au-delà de 2 jours |
-| **NOUVEAUTE** | 3€/jour | - |
-| **ENFANT** | 1.5€ | +1.5€/jour au-delà de 3 jours |
+| Type de Film | Tarif de base | Supplément | Points fidélité |
+|--------------|---------------|------------|-----------------|
+| **NORMAL** | 2€ | +1.5€/jour au-delà de 2 jours | 1 point |
+| **NOUVEAUTE** | 3€/jour | - | 1 point (+1 bonus si ≥2 jours) |
+| **ENFANT** | 1.5€ | +1.5€/jour au-delà de 3 jours | 1 point |
+| **COFFRET-SERIES-TV** | 0.50€/jour | - | 0 point |
+| **CINEPHILE** | 2€ (1 jour) | +4€/jour dépassé | 3 points (si 1 jour) / 0 sinon |
 
-### Points de fidélité :
-- **1 point** par location (quel que soit le type)
-- **+1 point bonus** pour les nouveautés louées au moins 2 jours
+### Détail des nouvelles catégories :
+
+#### COFFRET-SERIES-TV
+- Tarif fixe de **0.50€ par jour**, quel que soit le nombre de jours
+- **Aucun point de fidélité** n'est accordé
+
+#### CINEPHILE
+- Tarif de base : **2€ pour 1 jour**
+- Si le délai est dépassé : **+4€ par jour supplémentaire**
+  - Exemple : 2 jours = 6€, 3 jours = 10€, 4 jours = 14€
+- **3 points de fidélité** uniquement si la location est d'1 jour
+- **0 point** si le délai d'un jour est dépassé
 
 ---
 
@@ -37,6 +48,9 @@ classDiagram
         +addLocation(Location location) void
         +getNom() String
         +situation() String
+        +situationHTML() String
+        -calculerMontant(Location) double
+        -calculerPointsFidelite(Location) int
     }
     
     class Location {
@@ -50,9 +64,11 @@ classDiagram
     class Film {
         -String titre
         -int codePrix
-        +ENFANT: int = 2$
-        +NOUVEAUTE: int = 1$
         +NORMAL: int = 0$
+        +NOUVEAUTE: int = 1$
+        +ENFANT: int = 2$
+        +COFFRET_SERIES_TV: int = 3$
+        +CINEPHILE: int = 4$
         +Film(String titre, int codePrix)
         +getTitre() String
         +setCodePrix(int codePrix) void
@@ -84,35 +100,28 @@ sequenceDiagram
     Client->>Client: getNom()
     
     loop Pour chaque Location
+        Client->>Client: calculerMontant(location)
+        activate Client
         Client->>Location: getFilm()
-        activate Location
         Location-->>Client: Film
-        deactivate Location
-        
         Client->>Film: getCodePrix()
-        activate Film
         Film-->>Client: codePrix
-        deactivate Film
-        
         Client->>Location: getNbJours()
-        activate Location
         Location-->>Client: nbJours
-        deactivate Location
+        Note over Client: Calcul selon type de film
+        deactivate Client
         
-        Note over Client: Calcul du montant selon codePrix et nbJours
-        
+        Client->>Client: calculerPointsFidelite(location)
+        activate Client
         Client->>Film: getCodePrix()
-        activate Film
         Film-->>Client: codePrix
-        deactivate Film
-        
-        Note over Client: Calcul des points fidélité
+        Client->>Location: getNbJours()
+        Location-->>Client: nbJours
+        Note over Client: Calcul des points
+        deactivate Client
         
         Client->>Film: getTitre()
-        activate Film
         Film-->>Client: titre
-        deactivate Film
-        
         Note over Client: Mise en forme de la ligne
     end
     
@@ -126,23 +135,50 @@ sequenceDiagram
 
 ## 5. Tests unitaires
 
-Les tests JUnit sont disponibles dans `src/ClientTest.java`. Ils couvrent :
+Le projet utilise **JUnit 5** avec **deux classes de tests** (une par méthode situation) :
 
-- ✅ Film NORMAL (≤2 jours et >2 jours)
-- ✅ Film NOUVEAUTE (1 jour et ≥2 jours avec bonus fidélité)
-- ✅ Film ENFANT (≤3 jours et >3 jours)
+| Classe de test | Méthode testée | Nombre de tests |
+|----------------|----------------|-----------------|
+| `ClientSituationTest` | `situation()` | ~30 tests |
+| `ClientSituationHTMLTest` | `situationHTML()` | ~25 tests |
+
+### Couverture des tests :
+
+- ✅ Film NORMAL (≤2 jours, >2 jours, cas limites)
+- ✅ Film NOUVEAUTE (1 jour, ≥2 jours avec bonus fidélité)
+- ✅ Film ENFANT (≤3 jours, >3 jours)
+- ✅ Film COFFRET-SERIES-TV (tarif 0.50€/jour, 0 points)
+- ✅ Film CINEPHILE (1 jour avec bonus, dépassement sans bonus)
 - ✅ Client sans location
 - ✅ Cumul de plusieurs locations
-- ✅ Calcul correct des points de fidélité
+- ✅ Format HTML valide (structure, styles, contenu)
 
-### Exécution des tests
+---
+
+## 6. Utilisation (Maven)
+
+### Prérequis
+- Java 17+
+- Maven 3.6+
+
+### Commandes
 
 ```bash
-# Compilation
-javac -cp .:junit-4.13.2.jar:hamcrest-core-1.3.jar src/*.java
+# Compiler le projet
+mvn compile
 
-# Exécution
-java -cp .:junit-4.13.2.jar:hamcrest-core-1.3.jar org.junit.runner.JUnitCore ClientTest
+# Exécuter les tests
+mvn test
+
+# Exécuter les tests avec rapport de couverture (JaCoCo)
+mvn test jacoco:report
+# Rapport disponible dans target/site/jacoco/index.html
+
+# Lancer la démo
+mvn exec:java
+
+# Créer le JAR
+mvn package
 ```
 
 ---
@@ -150,10 +186,15 @@ java -cp .:junit-4.13.2.jar:hamcrest-core-1.3.jar org.junit.runner.JUnitCore Cli
 ## Structure du projet
 
 ```
-src/
-├── Client.java      # Classe principale gérant les locations
-├── Film.java        # Représente un film avec son type/prix
-├── Location.java    # Association entre un film et une durée
-├── Scenario.java    # Tests manuels (legacy)
-└── ClientTest.java  # Tests JUnit automatisés
+├── pom.xml                                    # Configuration Maven
+├── README.md                                  # Cette documentation
+└── src/
+    ├── main/java/com/videoclub/
+    │   ├── Client.java                        # Classe principale (situation + situationHTML)
+    │   ├── Film.java                          # Représente un film avec son type/prix
+    │   ├── Location.java                      # Association film-durée
+    │   └── Scenario.java                      # Classe de démonstration
+    └── test/java/com/videoclub/
+        ├── ClientSituationTest.java           # Tests pour situation()
+        └── ClientSituationHTMLTest.java       # Tests pour situationHTML()
 ```

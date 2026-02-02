@@ -1,0 +1,28 @@
+# Java/Maven
+/target/
+*.class
+*.log
+*.ctxt
+*.jar
+*.war
+*.ear
+
+# IDEs
+/.idea/
+*.iml
+/.classpath
+/.project
+/.settings/
+/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test/coverage
+/coverage/
+/jacoco.exec
+
+# Misc
+*.swp
+*~
